@@ -28,11 +28,11 @@ if (params.help) {
 }
 
 // Initalize Input
-DAT = file("${params.chrom}")
+CHROM = file("${params.chrom}")
 REF = file("${params.ref}")
 
 // Create Input Channel
-SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['CHR'], skip: 0, by:1)
+SampleData = Channel.fromPath("${CHROM}").splitCsv(header: ['CHR'], skip: 0, by:1)
 
 
 // ########### Genotype GVCF ###############
