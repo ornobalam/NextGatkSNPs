@@ -250,7 +250,7 @@ process checkvcf {
 }
 
 
-// ######## Direct into sets ##########
+// ######## Convert into lists ##########
 
 vchecked
 	.toList()
