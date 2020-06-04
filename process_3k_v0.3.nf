@@ -19,7 +19,7 @@ if (params.help) {
         log.info " "
         log.info "This is Nextflow pipeline for processing rice 3k dataset. Most parameters are stored in file process_3k.conf"
         log.info " "
-        log.info "Usage: nextflow run process_3k.nf -c process_3k.conf --ref --list --(other options)"
+        log.info "Usage: nextflow run process_3k.nf -c process_3k.conf --ref --list --chrom --(other options)"
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
@@ -32,9 +32,11 @@ if (params.help) {
 // Initalize Input
 DAT = file("${params.list}")
 REF = file("${params.ref}")
+CHR = file("${params.chrom}")
 
 // Create Input Channel
 SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['SID','RID','P1','P2'], skip: 0, by:1, sep:",")
+SampleData2 = Channel.fromPath("${CHR}").splitCsv(header: ['CHR'], skip: 0, by:1)
 
 // ########### Run BWA #############
 process bwa {
@@ -44,7 +46,7 @@ process bwa {
         executor = "${params.exe}"
 	if ("${params.exe}" == "slurm")
 	{
-        	clusterOptions = "--qos=cpuplus --cpus-per-task=${params.bwa_cpu} --time=${params.bwa_rt} --mem=${params.bwa_vmem}"
+        	clusterOptions = "--cpus-per-task=${params.bwa_cpu} --time=${params.bwa_rt} --mem=${params.bwa_vmem}"
 	}
 
         input:
@@ -77,7 +79,7 @@ process sort {
         executor = "${params.exe}"
         if ("${params.exe}" == "slurm")
         {
-        	clusterOptions = "--qos=cpuplus --cpus-per-task=${params.srt_cpu} --time=${params.srt_rt} --mem=${params.srt_vmem}"
+        	clusterOptions = "--cpus-per-task=${params.srt_cpu} --time=${params.srt_rt} --mem=${params.srt_vmem}"
 	}
 
         input:
@@ -113,7 +115,7 @@ process rmdup {
         executor = "${params.exe}"
         if ("${params.exe}" == "slurm")
         {
-		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.ddp_cpu} --time=${params.ddp_rt} --mem=${params.ddp_vmem}"
+		clusterOptions = "--cpus-per-task=${params.ddp_cpu} --time=${params.ddp_rt} --mem=${params.ddp_vmem}"
 	}
 
         input:
@@ -144,7 +146,7 @@ process checkbam {
 	executor = "${params.exe}"
 	if ("${params.exe}" == "slurm")
 	{
-		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.vb_cpu} --time=${params.vb_rt} --mem=${params.vb_vmem}"
+		clusterOptions = "--cpus-per-task=${params.vb_cpu} --time=${params.vb_rt} --mem=${params.vb_vmem}"
 	}
 
 
@@ -169,7 +171,7 @@ process index {
         executor = "${params.exe}"
         if ("${params.exe}" == "slurm")
         {
-	        clusterOptions = "--qos=cpuplus --cpus-per-task=${params.idx_cpu} --time=${params.idx_rt} --mem=${params.idx_vmem}"
+	        clusterOptions = "--cpus-per-task=${params.idx_cpu} --time=${params.idx_rt} --mem=${params.idx_vmem}"
 	}
 
 
@@ -198,21 +200,23 @@ process haplocall {
 	executor = "${params.exe}"
 	if ("${params.exe}" == "slurm")
 	{
-		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.hc_cpu} --time=${params.hc_rt} --mem=${params.hc_vmem}"
+		clusterOptions = "--cpus-per-task=${params.hc_cpu} --time=${params.hc_rt} --mem=${params.hc_vmem}"
 	}
 
  	input:
  	set val(SID), file(RMDUP), file(BAI) from index
  
  	output:
- 	file{ "${CALL}" } into called
+ 	file({ "${CALL}" }) into (called)
+	file({ "${VCI}" }) into (vcfindex)
  
  	script:
  	
  	CALL = "${SID}.g.vcf"
+	VCI = "${SID}.g.vcf.idx"
  
  	"""
- 	${params.hc_bin} ${params.hc_param} -R ${REF} -I ${RMDUP} -o ${CALL}	
+ 	${params.hc_bin} ${params.hc_param} -R ${REF} -I ${RMDUP} -O ${CALL}	
  	"""
  
 }
@@ -226,7 +230,7 @@ process checkvcf {
 	executor = "${params.exe}"
 	if ("${params.exe}" == "slurm")
 	{
-		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.vv_cpu} --time=${params.vv_rt} --mem=${params.vv_vmem}"
+		clusterOptions = "--cpus-per-task=${params.vv_cpu} --time=${params.vv_rt} --mem=${params.vv_vmem}"
 	}
 
 	input:
@@ -243,17 +247,15 @@ process checkvcf {
 }
 
 
-// ######## Split channel ##########
+// ######## Direct into sets ##########
 
 vchecked
-	.into { called_comb; called_bzip }
-
-
-// ######## Collect files ##########
-
-called_comb
 	.toList()
 	.set{ listed }
+
+vcfindex
+	.toList()
+	.set{ vcflist }
 
 // ######### CombineGVCFs ##########
 
@@ -264,98 +266,23 @@ process combine {
  	executor = "${params.exe}"
  	if ("${params.exe}" == "slurm")
  	{
- 		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.cg_cpu} --time=${params.cg_rt} --mem=${params.cg_vmem}"
+ 		clusterOptions = "--cpus-per-task=${params.cg_cpu} --time=${params.cg_rt} --mem=${params.cg_vmem}"
  	}
 
-	input:
+	input:           
+	val(CHROM) from SampleData2
 	file(CALL) from listed
+	file(VCI) from vcflist
 
 	output:
-	file( "${COMB}" ) into combined
+	file( "${DB}" )                                                                                                                                 
 
 	script:
-
+	CHR = "${CHROM.CHR}"
 	COMB_IN = CALL.collect { "--variant $it" }.join(' ')
-	BATCH = DAT.baseName
-	COMB = "${BATCH}_combined.g.vcf"
+	DB = "../../../../${CHROM.CHR}_db"
 
 	"""
-	${params.cg_bin} -R ${REF} ${COMB_IN} -o ${COMB}
-	"""
-	
+	${params.cg_bin} -R ${REF} ${COMB_IN} --genomicsdb-update-workspace-path $DB -L ${CHR}
+	""" 
 }
-
-// Return filtered gVCFs
-combined.subscribe { println "[ALL] $it" }
-
-// ####### Compress GVCFs ########
-
-process compress {
-
-	errorStrategy 'finish'
-
-	executor = "${params.exe}" 	
-	if ("${params.exe}" == "slurm")
-	{
-		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.bg_cpu} --time=${params.bg_rt} --mem=${params.bg_vmem}"
-	}
-
-        input:
-        file(CALL) from called_bzip
-
-        output:
-        file( "${BZIP}" ) into bzipped
-
-        script:
-
-        BZIP = "${CALL}.gz"
-
-        """
-        ${params.bg_bin} ${params.bg_param} ${CALL} > ${BZIP}
-	"""
-
-
-}
-
-// ####### Split channel #########
-
-bzipped
-	.into { bzip_sub; bzip_tab}
-
-
-// Return filtered gVCFs
-bzip_sub.subscribe { println "[IND] $it" }
-
-
-// ######### Tabix GVCFs #########
-
-process tabix {
-
-	errorStrategy 'finish'
-
-	executor = "${params.exe}"
-	if ("${params.exe}" == "slurm")
-	{
-		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.tx_cpu} --time=${params.tx_rt} --mem=${params.tx_vmem}"
-	}
-
-        input:
-        file(BZIP) from bzip_tab
-
-        output:
-        file( "${TAB}" ) into tabixed
-
-        script:
-        TAB = "${BZIP}.tbi"
-
-        """
-        ${params.tx_bin} ${params.tx_param} ${BZIP}
-        """
-}
-
-
-// Return filtered gVCFs
-tabixed.subscribe { println "[IND] $it" }
-
-
-

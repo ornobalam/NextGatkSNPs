@@ -16,7 +16,7 @@ if (params.help) {
         log.info " "
         log.info "This is Nextflow pipeline for genotyping SNPS in rice 3k dataset. Most parameters are stored in file call_3k.conf"
         log.info " "
-        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --list --(other options)"
+        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --list --db --(other options)"
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
@@ -29,52 +29,10 @@ if (params.help) {
 // Initalize Input
 DAT = file("${params.list}")
 REF = file("${params.ref}")
+DB = file("${params.db}")
 
 // Create Input Channel
-SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['CHR','BED','FILE'], skip: 0, by:1, sep:",")
-
-
-// ########### Split into chromosomes  #############
-process split {
-
-	errorStrategy 'retry'
-	maxRetries 2
-	maxErrors 13	
-
-        executor = "${params.exe}"
-	if ("${params.exe}" == "slurm")
-	{
-        	clusterOptions = "--qos=cpuplus --cpus-per-task=${params.sv_cpu} --time=${params.sv_rt} --mem=${params.sv_vmem}"
-	}
-
-        input:
-         val(GVCF) from SampleData
-
-        output:
-         set val(CHR), file({ "${CHUNK}" }) into splat
-
-        script:
-
-	 CHR = "${GVCF.CHR}"
-	 BED = file("${GVCF.BED}")
-         CHUNK = "${GVCF.FILE}_${GVCF.CHR}.g.vcf"
-
-         IN = file("${GVCF.FILE}")
-
-         """
-         ${params.sv_bin} ${params.sv_param} -V ${IN} -R ${REF} -L ${BED} -o ${CHUNK}
-	 """
-}
-
-
-// ####### MERGE CHROMOSOME CHANNELS #########
-
-
-splat
-	.map {chr, file -> tuple(chr, file) }
-	.groupTuple()
-	.set { merg_chrom }
-
+SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['CHR'], skip: 0, by:1)
 
 
 // ########### Genotype GVCF ###############
@@ -87,28 +45,21 @@ process genotype {
         executor = "${params.exe}"
         if ("${params.exe}" == "slurm")
         {
-        	clusterOptions = "--qos=cpuplus --cpus-per-task=${params.gv_cpu} --time=${params.gv_rt} --mem=${params.gv_vmem}"
+        	clusterOptions = "--cpus-per-task=${params.gv_cpu} --time=${params.gv_rt} --mem=${params.gv_vmem}"
 	}
 
         input:
-         set val(CHR), file(CHUNK) from merg_chrom
+        val(GVCF) from SampleData
 
         output:
-         file({ "${CALLD}" }) into called
+         file({ "${CALLD}" })
 
         script:
-
-         ALL_IN = CHUNK.collect { "-V $it" }.join(' ')
-         CALLD = "${CHR}.vcf"
+	CHR = "${GVCF.CHR}"
+        CALLD = "${CHR}.vcf"
 
          """
-         ${params.gv_bin} ${params.gv_param} ${ALL_IN} -R ${REF} -o ${CALLD}
+         ${params.gv_bin} ${params.gv_param} -V gendb://$DB -R ${REF} -L ${CHR} -O ${CALLD}
          """
 }
-
-
-// Return filtered gVCFs
-called.subscribe { println "[OUT] $it" }
-
-
 
