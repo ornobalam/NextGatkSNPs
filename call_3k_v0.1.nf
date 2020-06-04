@@ -16,7 +16,7 @@ if (params.help) {
         log.info " "
         log.info "This is Nextflow pipeline for genotyping SNPS in rice 3k dataset. Most parameters are stored in file call_3k.conf"
         log.info " "
-        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --list --db --(other options)"
+        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --list --(other options)"
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
@@ -29,7 +29,6 @@ if (params.help) {
 // Initalize Input
 DAT = file("${params.list}")
 REF = file("${params.ref}")
-DB = file("${params.db}")
 
 // Create Input Channel
 SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['CHR'], skip: 0, by:1)
@@ -57,6 +56,7 @@ process genotype {
         script:
 	CHR = "${GVCF.CHR}"
         CALLD = "${CHR}.vcf"
+	DB = "../../../../${GVCF.CHR}_db"
 
          """
          ${params.gv_bin} ${params.gv_param} -V gendb://$DB -R ${REF} -L ${CHR} -O ${CALLD}
