@@ -6,8 +6,11 @@
 // #    - mapping to reference          #
 // #    - sorting reads		        #
 // #    - removal PCR duplicates        #
-// #    - splitting data into chroms	#
 // #    - calling haplotypes            #
+// #	- storing g.vcfs in GenomicsDB	#
+// #					#
+// #    Updated to GATK4 best practices #
+// #	by Ornob Alam, NYU, 2020	#
 // #                                    #
 // ######################################
 
