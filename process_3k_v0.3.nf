@@ -286,6 +286,6 @@ process combine {
 	DB = "../../../../${CHROM.CHR}_db"
 
 	"""
-	${params.cg_bin} -R ${REF} ${COMB_IN} --genomicsdb-update-workspace-path $DB -L ${CHR}
+	${params.cg_bin} -R ${REF} ${COMB_IN} --genomicsdb-workspace-path $DB -L ${CHR}
 	""" 
 }
