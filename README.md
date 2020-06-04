@@ -42,6 +42,8 @@ If all files are present, you can run this pipeline as follows:
 nextflow run -c process_3k_v0.3.conf process_3k_v0.3.nf --ref ref.fa --list batch.csv --chrom chrom.txt
 ```
 
+Note that you can add more individuals to the GenomicsDB databases by changing the GenomicsDBImport argument from --genomicsdb-workspace-path to --genomicsdb-update-workspace-path.
+
 ## CALL SNPS
 
 Now that you have GenomicsDB files for each chromosome, you can use them to call SNPs
