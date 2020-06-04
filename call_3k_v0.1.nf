@@ -2,10 +2,11 @@
 
 // ######################################
 // #    Rafal Gutaker, NYU, 2018        #
-// #    Pipeline that performs:         #
-// #    - splitting gvcf per chromosome #
-// #    - Genotypes chromosomes		#
-// #                                    #
+// #    Pipeline that genotypes from    #
+// #    GenomicsDB files		#
+// #    				#
+// #    Updated to GATK4 best practices #
+// #	by Ornob Alam, NYU, 2020	#
 // ######################################
 
 
@@ -16,7 +17,7 @@ if (params.help) {
         log.info " "
         log.info "This is Nextflow pipeline for genotyping SNPS in rice 3k dataset. Most parameters are stored in file call_3k.conf"
         log.info " "
-        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --list --(other options)"
+        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --chrom --(other options)"
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
@@ -27,7 +28,7 @@ if (params.help) {
 }
 
 // Initalize Input
-DAT = file("${params.list}")
+DAT = file("${params.chrom}")
 REF = file("${params.ref}")
 
 // Create Input Channel
