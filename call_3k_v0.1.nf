@@ -21,7 +21,7 @@ if (params.help) {
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
-        log.info "--list\t[STRING]\tPath to the file with run IDs and fastq files to be processed [OBLIGATORY]"
+        log.info "--chrom\t[STRING]\tPath to the file with run IDs and fastq files to be processed [OBLIGATORY]"
         log.info "--exe\t[STRING]\tExecutor mode, -local- or -slurm- [DEFUALT: local]"
         log.info " "
         exit 1
