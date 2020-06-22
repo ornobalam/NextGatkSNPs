@@ -21,7 +21,7 @@ if (params.help) {
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
-        log.info "--chrom\t[STRING]\tPath to the file with run IDs and fastq files to be processed [OBLIGATORY]"
+        log.info "--chrom\t[STRING]\tPath to the file with chromosome IDs [OBLIGATORY]"
         log.info "--exe\t[STRING]\tExecutor mode, -local- or -slurm- [DEFUALT: local]"
         log.info " "
         exit 1
@@ -49,15 +49,15 @@ process genotype {
 	}
 
         input:
-        val(GVCF) from SampleData
+        val(CHROM) from SampleData
 
         output:
          file({ "${CALLD}" })
 
         script:
-	CHR = "${GVCF.CHR}"
+	CHR = "${CHROM.CHR}"
         CALLD = "${CHR}.vcf"
-	DB = "../../../../${GVCF.CHR}_db"
+	DB = "../../../../${CHROM.CHR}_db"
 
          """
          ${params.gv_bin} ${params.gv_param} -V gendb://$DB -R ${REF} -L ${CHR} -O ${CALLD}
