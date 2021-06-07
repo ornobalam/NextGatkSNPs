@@ -17,23 +17,64 @@ if (params.help) {
         log.info " "
         log.info "This is Nextflow pipeline for genotyping SNPS in rice 3k dataset. Most parameters are stored in file call_3k.conf"
         log.info " "
-        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --chrom --(other options)"
+        log.info "Usage: nextflow run call_3k.nf -c call_3k.conf --ref --list --(other options)"
         log.info "Options:"
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
-        log.info "--chrom\t[STRING]\tPath to the file with chromosome IDs [OBLIGATORY]"
-        log.info "--exe\t[STRING]\tExecutor mode, -local- or -slurm- [DEFUALT: local]"
+        log.info "--list\t[STRING]\tPath to the file with run IDs and fastq files to be processed [OBLIGATORY]"
+        log.info "--exe\t[STRING]\tExecutor mode, -local- or -slurm- [DEFAULT: local]"
         log.info " "
         exit 1
 }
 
 // Initalize Input
-CHROM = file("${params.chrom}")
+DAT = file("${params.list}")
 REF = file("${params.ref}")
 
 // Create Input Channel
-SampleData = Channel.fromPath("${CHROM}").splitCsv(header: ['CHR'], skip: 0, by:1)
+SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['CHR','BED','FILE'], skip: 0, by:1, sep:",")
 
+
+// ########### Split into chromosomes  #############
+process split {
+
+	errorStrategy 'retry'
+	maxRetries 2
+	maxErrors 13	
+
+        executor = "${params.exe}"
+	if ("${params.exe}" == "slurm")
+	{
+        	clusterOptions = "--cpus-per-task=${params.sv_cpu} --time=${params.sv_rt} --mem=${params.sv_vmem}"
+	}
+
+        input:
+         val(GVCF) from SampleData
+
+        output:
+         set val(CHR), file({ "${CHUNK}" }) into splat
+
+        script:
+
+	 CHR = "${GVCF.CHR}"
+	 BED = file("${GVCF.BED}")
+         CHUNK = "${GVCF.FILE}_${GVCF.CHR}.g.vcf"
+
+         IN = file("${GVCF.FILE}")
+
+         """
+         ${params.sv_bin} ${params.sv_param} -V ${IN} -R ${REF} -L ${BED} -o ${CHUNK}
+	 """
+}
+
+
+// ####### MERGE CHROMOSOME CHANNELS #########
+
+
+splat
+	.map {chr, file -> tuple(chr, file) }
+	.groupTuple()
+	.set { merg_chrom }
 
 // ########### Genotype GVCF ###############
 process genotype {
