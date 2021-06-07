@@ -7,7 +7,7 @@
 // #    - sorting reads		        #
 // #    - removal PCR duplicates        #
 // #    - calling haplotypes            #
-// #	- storing g.vcfs in GenomicsDB	#
+// #					#
 // #					#
 // #    Updated to GATK4 best practices #
 // #	by Ornob Alam, NYU, 2020	#
@@ -27,7 +27,6 @@ if (params.help) {
         log.info "--help\t[BOOLEAN]\tShow this help message"
         log.info "--ref\t[STRING]\tPath to the indexed referece fasta file [OBLIGATORY]"
         log.info "--list\t[STRING]\tPath to the file with run IDs and fastq files to be processed [OBLIGATORY]"
-	log.info "--chrom\t[STRING]\Path to the file with the chromosome IDs [OBLIGATORY]"
         log.info "--exe\t[STRING]\tExecutor mode, -local- or -slurm- [DEFUALT: local]"
         log.info " "
         exit 1
@@ -36,11 +35,9 @@ if (params.help) {
 // Initalize Input
 DAT = file("${params.list}")
 REF = file("${params.ref}")
-CHR = file("${params.chrom}")
 
 // Create Input Channel
 SampleData = Channel.fromPath("${DAT}").splitCsv(header: ['SID','RID','P1','P2'], skip: 0, by:1, sep:",")
-SampleData2 = Channel.fromPath("${CHR}").splitCsv(header: ['CHR'], skip: 0, by:1)
 
 // ########### Run BWA #############
 process bwa {
@@ -251,15 +248,18 @@ process checkvcf {
 }
 
 
-// ######## Convert into lists ##########
+
+// ######## Split channel ##########
 
 vchecked
+	.into { called_comb; called_bzip }
+
+
+// ######## Collect files ##########
+
+called_comb
 	.toList()
 	.set{ listed }
-
-vcfindex
-	.toList()
-	.set{ vcflist }
 
 // ######### CombineGVCFs ##########
 
@@ -273,20 +273,92 @@ process combine {
  		clusterOptions = "--cpus-per-task=${params.cg_cpu} --time=${params.cg_rt} --mem=${params.cg_vmem}"
  	}
 
-	input:           
-	val(CHROM) from SampleData2
+	input:
 	file(CALL) from listed
-	file(VCI) from vcflist
 
 	output:
-	file( "${DB}" )                                                                                                                                 
+	file( "${COMB}" ) into combined
 
 	script:
-	CHR = "${CHROM.CHR}"
+
 	COMB_IN = CALL.collect { "--variant $it" }.join(' ')
-	DB = "../../../../${CHROM.CHR}_db"
+	BATCH = DAT.baseName
+	COMB = "${BATCH}_combined.g.vcf"
 
 	"""
-	${params.cg_bin} -R ${REF} ${COMB_IN} --genomicsdb-workspace-path $DB -L ${CHR}
-	""" 
+	${params.cg_bin} -R ${REF} ${COMB_IN} -o ${COMB}
+	"""
+	
 }
+
+// Return filtered gVCFs
+combined.subscribe { println "[ALL] $it" }
+
+// ####### Compress GVCFs ########
+
+process compress {
+
+	errorStrategy 'finish'
+
+	executor = "${params.exe}" 	
+	if ("${params.exe}" == "slurm")
+	{
+		clusterOptions = "--qos=cpuplus --cpus-per-task=${params.bg_cpu} --time=${params.bg_rt} --mem=${params.bg_vmem}"
+	}
+
+        input:
+        file(CALL) from called_bzip
+
+        output:
+        file( "${BZIP}" ) into bzipped
+
+        script:
+
+        BZIP = "${CALL}.gz"
+
+        """
+        ${params.bg_bin} ${params.bg_param} ${CALL} > ${BZIP}
+	"""
+
+
+}
+
+// ####### Split channel #########
+
+bzipped
+	.into { bzip_sub; bzip_tab}
+
+
+// Return filtered gVCFs
+bzip_sub.subscribe { println "[IND] $it" }
+
+
+// ######### Tabix GVCFs #########
+
+process tabix {
+
+	errorStrategy 'finish'
+
+	executor = "${params.exe}"
+	if ("${params.exe}" == "slurm")
+	{
+		clusterOptions = "--cpus-per-task=${params.tx_cpu} --time=${params.tx_rt} --mem=${params.tx_vmem}"
+	}
+
+        input:
+        file(BZIP) from bzip_tab
+
+        output:
+        file( "${TAB}" ) into tabixed
+
+        script:
+        TAB = "${BZIP}.tbi"
+
+        """
+        ${params.tx_bin} ${params.tx_param} ${BZIP}
+        """
+}
+
+
+// Return filtered gVCFs
+tabixed.subscribe { println "[IND] $it" }
