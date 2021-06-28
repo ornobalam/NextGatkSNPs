@@ -1,4 +1,7 @@
 # NextGatkSNPs
+
+[CURRENTLY UPDATING]
+
 Nextflow pipelines for short read mapping and SNP calling - complies with GATK4 best practices. 
 
 This is NextFlow pipeline that runs all processes to map short reads in fastq format to reference genome, 
